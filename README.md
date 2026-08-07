@@ -4,7 +4,67 @@ NestJS를 학습하며 만드는 독서 기록 CRUD API 프로젝트입니다.
 
 단순히 완성된 API를 만드는 것보다 JavaScript와 TypeScript의 기초부터 NestJS의 구조, 데이터베이스, 테스트까지 단계적으로 이해하는 것을 목표로 합니다.
 
-> 현재 저장소는 학습을 시작하기 전 준비 단계입니다. NestJS 프로젝트를 초기화한 뒤 설치 및 실행 방법을 이 문서에 추가할 예정입니다.
+현재 NestJS 기본 프로젝트가 초기화되어 있으며, 첫 번째 API를 실행해 볼 수 있습니다.
+
+## 시작하기
+
+### 요구 사항
+
+- Node.js
+- pnpm
+
+### 의존성 설치
+
+```bash
+pnpm install
+```
+
+### 개발 서버 실행
+
+```bash
+pnpm start:dev
+```
+
+서버가 실행되면 새 터미널에서 다음 요청을 보냅니다.
+
+```bash
+curl http://localhost:3000
+```
+
+아래 응답이 나오면 기본 애플리케이션이 정상적으로 실행된 것입니다.
+
+```text
+Hello World!
+```
+
+개발 서버는 파일 변경을 감지해 자동으로 다시 실행됩니다. 종료할 때는 서버를 실행한 터미널에서 `Ctrl+C`를 누릅니다.
+
+## 기본 명령어
+
+| 명령어 | 역할 |
+| --- | --- |
+| `pnpm start:dev` | 개발 서버를 감시 모드로 실행 |
+| `pnpm build` | TypeScript 코드를 배포용 JavaScript로 빌드 |
+| `pnpm lint` | 코드 규칙 검사 및 자동 수정 |
+| `pnpm test` | 단위 테스트 실행 |
+| `pnpm test:e2e` | 실제 HTTP 요청에 가까운 e2e 테스트 실행 |
+
+## 기본 요청 흐름
+
+현재 `GET /` 요청은 다음 순서로 처리됩니다.
+
+```text
+src/main.ts
+  → AppModule
+  → AppController.getHello()
+  → AppService.getHello()
+  → "Hello World!"
+```
+
+- `main.ts`: NestJS 애플리케이션을 생성하고 3000번 포트에서 실행합니다.
+- `app.module.ts`: 컨트롤러와 서비스를 NestJS에 등록하는 루트 모듈입니다.
+- `app.controller.ts`: HTTP 요청을 받아 적절한 서비스 메서드를 호출합니다.
+- `app.service.ts`: 컨트롤러가 사용할 동작을 제공합니다.
 
 ## 학습 목표
 
@@ -100,6 +160,7 @@ API 경로와 데이터 필드는 학습 과정에서 요구사항을 정리하�
 
 - TypeScript
 - NestJS
+- pnpm
 
 데이터베이스, ORM, 테스트 도구의 구체적인 선택은 해당 학습 단계에서 장단점을 비교한 뒤 결정합니다.
 
@@ -107,10 +168,10 @@ API 경로와 데이터 필드는 학습 과정에서 요구사항을 정리하�
 
 - [x] 학습 목표와 협업 방식 정의
 - [x] 프로젝트 README 작성
-- [ ] NestJS 프로젝트 초기화
-- [ ] 첫 번째 API 실행
+- [x] NestJS 프로젝트 초기화
+- [x] 첫 번째 기본 API 작성
+- [x] 기본 API 실행 및 요청 확인
 - [ ] 독서 기록 CRUD 구현
 - [ ] 입력 검증과 예외 처리
 - [ ] 데이터베이스 연결
 - [ ] 테스트 작성
-
