@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
+import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 import type { ReadingRecord } from './reading-record.interface';
 
 @Injectable()
@@ -34,5 +35,23 @@ export class ReadingRecordsService {
     }
 
     return readingRecord;
+  }
+
+  update(
+    id: number,
+    updateReadingRecordDto: UpdateReadingRecordDto,
+  ): ReadingRecord {
+    const readingRecord = this.findOne(id);
+
+    Object.assign(readingRecord, updateReadingRecordDto);
+
+    return readingRecord;
+  }
+
+  remove(id: number): void {
+    const readingRecord = this.findOne(id);
+    const index = this.readingRecords.indexOf(readingRecord);
+
+    this.readingRecords.splice(index, 1);
   }
 }
