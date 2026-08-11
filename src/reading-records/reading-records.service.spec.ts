@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReadingRecordsService } from './reading-records.service';
 import { NotFoundException } from '@nestjs/common';
+import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 
 describe('ReadingRecordsService', () => {
   let service: ReadingRecordsService;
@@ -41,12 +42,30 @@ describe('ReadingRecordsService', () => {
         author: '로버트 C. 마틴',
       });
 
-      const updatedRecord = service.update(createdRecord.id, {
-        author: 'Robert C. Martin',
-      });
+      // ValidationPipe를 거친 DTO와 동일한 모양을 만든다.
+      // 보내지 않은 title은 undefined 값을 가진 채로 남아 있다.
+      const updateDto = new UpdateReadingRecordDto();
+      updateDto.author = 'Robert C. Martin';
+
+      const updatedRecord = service.update(createdRecord.id, updateDto);
 
       expect(updatedRecord.title).toBe('클린 코드');
       expect(updatedRecord.author).toBe('Robert C. Martin');
+    });
+
+    it('keeps every field unchanged when the dto is empty', () => {
+      const createdRecord = service.create({
+        title: '클린 코드',
+        author: '로버트 C. 마틴',
+      });
+
+      const updatedRecord = service.update(
+        createdRecord.id,
+        new UpdateReadingRecordDto(),
+      );
+
+      expect(updatedRecord.title).toBe('클린 코드');
+      expect(updatedRecord.author).toBe('로버트 C. 마틴');
     });
 
     it('throws NotFoundException when the record does not exist', () => {

@@ -43,7 +43,16 @@ export class ReadingRecordsService {
   ): ReadingRecord {
     const readingRecord = this.findOne(id);
 
-    Object.assign(readingRecord, updateReadingRecordDto);
+    // 요청에 실제로 담겨 온 필드만 반영한다.
+    // ValidationPipe를 거친 DTO는 보내지 않은 필드도 undefined 값으로 갖고 있어서,
+    // Object.assign을 쓰면 기존 값을 undefined로 덮어써 버린다.
+    if (updateReadingRecordDto.title !== undefined) {
+      readingRecord.title = updateReadingRecordDto.title;
+    }
+
+    if (updateReadingRecordDto.author !== undefined) {
+      readingRecord.author = updateReadingRecordDto.author;
+    }
 
     return readingRecord;
   }
