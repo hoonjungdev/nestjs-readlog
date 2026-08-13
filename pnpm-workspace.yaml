@@ -1,2 +1,4 @@
 allowBuilds:
+  # better-sqlite3는 네이티브 모듈이라 설치 스크립트로 바이너리를 준비해야 동작한다.
+  better-sqlite3: true
   unrs-resolver: true

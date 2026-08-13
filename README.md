@@ -4,7 +4,7 @@ NestJS를 학습하며 만드는 독서 기록 CRUD API 프로젝트입니다.
 
 단순히 완성된 API를 만드는 것보다 JavaScript와 TypeScript의 기초부터 NestJS의 구조, 데이터베이스, 테스트까지 단계적으로 이해하는 것을 목표로 합니다.
 
-현재 메모리 기반 독서 기록 CRUD API와 입력 검증이 구현되어 있습니다.
+현재 독서 기록 CRUD API와 입력 검증이 구현되어 있고, 데이터는 SQLite에 저장됩니다.
 
 단계별로 배운 내용은 [학습 노트](./docs/learning/)에 정리하고 있습니다.
 
@@ -91,7 +91,7 @@ src/main.ts
 | 독서 기록 수정 | `PATCH` | `/reading-records/:id` | 완료 |
 | 독서 기록 삭제 | `DELETE` | `/reading-records/:id` | 완료 |
 
-현재 데이터는 메모리 배열에 저장되며, 서버를 재시작하면 사라집니다.
+데이터는 프로젝트 루트의 `readlog.sqlite` 파일에 저장되며, 서버를 재시작해도 남아 있습니다. 이 파일은 로컬 개발용이라 Git으로 관리하지 않습니다.
 
 API 경로와 데이터 필드는 학습 과정에서 요구사항을 정리하며 변경할 수 있습니다.
 
@@ -171,8 +171,11 @@ API 경로와 데이터 필드는 학습 과정에서 요구사항을 정리하�
 - TypeScript
 - NestJS
 - pnpm
+- SQLite (`better-sqlite3` 드라이버)
+- TypeORM
+- Jest, supertest
 
-데이터베이스, ORM, 테스트 도구의 구체적인 선택은 해당 학습 단계에서 장단점을 비교한 뒤 결정합니다.
+SQLite는 별도 설치 없이 파일 하나로 동작해 학습에 집중하기 좋아 선택했습니다. 나중에 PostgreSQL로 옮기더라도 주로 연결 설정만 바뀝니다.
 
 ## 현재 진행 상태
 
@@ -188,3 +191,7 @@ API 경로와 데이터 필드는 학습 과정에서 요구사항을 정리하�
   - [x] e2e 테스트에 전역 `ValidationPipe` 적용 ([04번 노트](./docs/learning/04-e2e-테스트.md) 참고)
   - [x] 수정/삭제 e2e 테스트
 - [ ] 데이터베이스 연결
+  - [x] SQLite와 TypeORM 선택
+  - [x] 엔티티 정의와 저장소(Repository) 교체
+  - [x] 테스트용 인메모리 DB 분리
+  - [ ] 마이그레이션 도입 (`synchronize: true` 제거)

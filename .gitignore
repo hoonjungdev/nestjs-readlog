@@ -13,6 +13,9 @@ coverage/
 # logs
 *.log
 
+# local database files
+*.sqlite
+
 # editor and operating system files
 .DS_Store
 .idea/

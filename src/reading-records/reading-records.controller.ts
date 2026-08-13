@@ -10,7 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ReadingRecordsService } from './reading-records.service';
-import type { ReadingRecord } from './reading-record.interface';
+import { ReadingRecord } from './reading-record.entity';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 
@@ -21,17 +21,17 @@ export class ReadingRecordsController {
   @Post()
   create(
     @Body() createReadingRecordDto: CreateReadingRecordDto,
-  ): ReadingRecord {
+  ): Promise<ReadingRecord> {
     return this.readingRecordsService.create(createReadingRecordDto);
   }
 
   @Get()
-  findAll(): ReadingRecord[] {
+  findAll(): Promise<ReadingRecord[]> {
     return this.readingRecordsService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number): ReadingRecord {
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<ReadingRecord> {
     return this.readingRecordsService.findOne(id);
   }
 
@@ -39,13 +39,13 @@ export class ReadingRecordsController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateReadingRecordDto: UpdateReadingRecordDto,
-  ): ReadingRecord {
+  ): Promise<ReadingRecord> {
     return this.readingRecordsService.update(id, updateReadingRecordDto);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  remove(@Param('id', ParseIntPipe) id: number): void {
-    this.readingRecordsService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.readingRecordsService.remove(id);
   }
 }
