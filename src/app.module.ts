@@ -3,21 +3,18 @@ import { APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ReadingRecord } from './reading-records/reading-record.entity';
+import { dataSourceOptions } from './data-source';
 import { ReadingRecordsModule } from './reading-records/reading-records.module';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
-      type: 'better-sqlite3',
-      // 평소에는 파일 DB를 쓰고, 테스트에서는 DATABASE_PATH로 인메모리 DB를 지정한다.
-      // 그래야 테스트가 개발용 데이터를 건드리지 않는다.
-      database: process.env.DATABASE_PATH ?? 'readlog.sqlite',
-      entities: [ReadingRecord],
-      // 엔티티 정의에 맞춰 테이블을 자동으로 만들고 바꾼다.
-      // 편리하지만 컬럼을 지우면 데이터도 함께 사라지므로 개발 중에만 쓴다.
-      // 이후 단계에서 마이그레이션으로 교체하며 끌 예정이다.
-      synchronize: true,
+      // DB 접속 설정은 data-source.ts 한 곳에만 둔다.
+      // 앱과 TypeORM CLI가 같은 설정을 보게 하기 위해서다.
+      ...dataSourceOptions,
+      // 앱이 시작할 때 아직 실행되지 않은 마이그레이션을 자동으로 실행한다.
+      // 개발과 테스트에서는 편하지만, 운영에서는 배포 과정에서 따로 실행하는 편이 안전하다.
+      migrationsRun: true,
     }),
     ReadingRecordsModule,
   ],
