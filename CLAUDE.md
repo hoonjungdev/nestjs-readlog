@@ -204,6 +204,19 @@ pnpm test -- reading-records.service.spec.ts
 pnpm test -- -t "이름이 일치하는 테스트"
 ```
 
+마이그레이션 (모두 `src/data-source.ts`를 기준으로 동작):
+
+```bash
+pnpm migration:generate src/migrations/이름   # 엔티티와 "현재 DB의 실제 상태"의 차이를 SQL로
+pnpm migration:run                            # 밀린 마이그레이션 실행
+pnpm migration:revert                         # 마지막 것의 down() 실행
+pnpm migration:show                           # [X] 실행됨 / [ ] 대기중
+```
+
+`generate`는 엔티티 정의만 보고 SQL을 만드는 것이 아니라 **연결된 DB와 비교해 차이를 만듭니다.** 초기 `CREATE TABLE`을 얻으려면 빈 DB를 기준으로 실행해야 합니다 (`DATABASE_PATH=/tmp/gen.sqlite pnpm migration:generate ...`).
+
+개발 서버는 **하나만** 띄우세요. `pnpm start:dev`가 여러 개 떠 있으면 파일을 저장할 때마다 각각 재시작합니다.
+
 단위 테스트용 jest 설정은 `package.json`에 인라인으로 들어 있고(`rootDir: "src"`, testRegex `*.spec.ts`), e2e 설정은 `test/jest-e2e.json`이며 `test/*.e2e-spec.ts`를 대상으로 합니다.
 
 ## 아키텍처
@@ -215,12 +228,23 @@ Nest CLI 표준 구조를 따르며, 기능(feature) 단위 모듈로 구성됩�
 ```
 main.ts → AppModule → ReadingRecordsModule
   → ReadingRecordsController (HTTP 계층: 파라미터/바디 파싱, 상태 코드)
-  → ReadingRecordsService (비즈니스 로직, 현재는 메모리 저장소)
+  → ReadingRecordsService (비즈니스 로직)
+  → Repository<ReadingRecord> (TypeORM, SQLite)
 ```
 
 - `AppModule`(`src/app.module.ts`)은 기능 모듈들을 import할 뿐, 독서 기록 관련 로직을 직접 갖고 있지 않습니다.
 - 각 기능 모듈은 Nest DI를 통해 자체 `Controller` + `Service`를 구성합니다 — 컨트롤러는 얇게 유지하고(입력 파싱, 서비스 호출, 결과 반환), 서비스를 `new`로 직접 생성하지 않습니다.
-- `ReadingRecordsService`(`src/reading-records/reading-records.service.ts`)는 현재 메모리 배열(`private readonly readingRecords: ReadingRecord[]`)과 자동 증가하는 `nextId`로 데이터를 저장합니다. 이는 향후 데이터베이스 계층으로 교체될 임시 구현이므로, 계속 이 방식일 것이라 가정하지 마세요.
-- `ReadingRecord`(`src/reading-records/reading-record.interface.ts`)는 내부/응답 형태이고, `src/reading-records/dto/` 아래 DTO들은 API 입력 형태를 표현합니다. 현재는 필드가 겹치지만 서로 별개의 개념으로 유지됩니다.
+- `ReadingRecordsService`(`src/reading-records/reading-records.service.ts`)는 `@InjectRepository(ReadingRecord)`로 TypeORM `Repository`를 주입받아 SQLite에 저장합니다. 모든 메서드가 `async`이며 `Promise`를 반환합니다.
+- `ReadingRecord`(`src/reading-records/reading-record.entity.ts`)는 테이블 구조이자 현재의 응답 형태이고, `src/reading-records/dto/` 아래 DTO들은 API 입력 형태를 표현합니다. 필드가 겹치지만 서로 별개의 개념으로 유지됩니다 — 아직 응답 전용 타입은 분리하지 않았습니다.
+- `ReadingStatus`(`src/reading-records/reading-status.enum.ts`)는 유니온 타입이 아니라 `enum`입니다. `@IsEnum()`과 DB의 CHECK 제약이 런타임에 값 목록을 필요로 하므로, 값을 여기 한 곳에만 두기 위한 선택입니다.
 - 존재하지 않는 리소스 조회 시 서비스에서 곧바로 Nest의 `NotFoundException`을 던집니다 — 아직 커스텀 예외 필터는 없습니다.
-- `ValidationPipe`/`class-validator`는 아직 연결되어 있지 않습니다. `CreateReadingRecordDto`는 런타임 검증이 없는 순수 TS 클래스입니다. 이 부분이 추가되기 전까지는 런타임에 입력이 검증된다고 가정하지 마세요.
+- 전역 `ValidationPipe`는 `main.ts`가 아니라 `AppModule`에 `APP_PIPE`로 등록되어 있습니다(`whitelist`, `forbidNonWhitelisted`). `main.ts`에 두면 e2e 테스트에는 적용되지 않아 테스트 환경과 실제 환경이 갈라지기 때문입니다.
+
+### 데이터베이스와 마이그레이션
+
+- DB 설정은 `src/data-source.ts` 한 곳에만 있습니다. `AppModule`과 TypeORM CLI가 같은 설정을 보게 하기 위해서이니, `app.module.ts`에 접속 설정을 따로 적지 마세요.
+- 스키마는 마이그레이션이 책임집니다. `synchronize`는 앱과 테스트 모두에서 꺼져 있습니다.
+- 마이그레이션은 경로 패턴(glob)이 아니라 **클래스를 직접 import해서** `migrations` 배열에 등록합니다. 새 마이그레이션을 만들면 `data-source.ts`에 손으로 추가해야 합니다.
+- `migrationsRun`은 **메모리 DB일 때만** 켜집니다(`isInMemoryDatabase`). 파일 DB에서 켜두면 앱 인스턴스가 여러 개일 때 같은 마이그레이션이 중복 실행되어 데이터가 사라질 수 있습니다(실제로 겪은 사고 — `docs/learning/06-필드-추가와-마이그레이션.md` 참고). 개발/운영에서는 `pnpm migration:run`으로 직접 실행합니다.
+- 엔티티의 `default`와 DB 스키마의 `DEFAULT`는 일하는 순간이 다릅니다. 앱이 INSERT할 때 값을 채우는 것은 **엔티티의 `default`**이며, 이것을 지우면 TypeORM이 `NULL`을 명시해 넣어 `NOT NULL` 제약에 걸립니다.
+- `undefined`와 `null`을 구분합니다. PATCH에서 필드가 없으면(`undefined`) 손대지 않고, `null`이면 값을 비웁니다. 서비스에서 `??` 대신 `!== undefined`를 쓰는 이유입니다.
