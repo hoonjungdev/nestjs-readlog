@@ -21,6 +21,12 @@ export class ReadingRecordsService {
     const readingRecord = this.readingRecordsRepository.create({
       title: createReadingRecordDto.title,
       author: createReadingRecordDto.author,
+      // status를 보내지 않으면 undefined인데, create()는 undefined인 속성을
+      // 아예 만들지 않으므로 엔티티에 선언한 default가 적용된다.
+      // 기본값을 여기에 또 쓰면 같은 값이 두 곳에 흩어진다.
+      status: createReadingRecordDto.status,
+      // rating은 default가 없다. "별점 없음"을 null로 분명히 적어 넣는다.
+      rating: createReadingRecordDto.rating ?? null,
     });
 
     // 실제로 INSERT가 실행되는 지점. 저장된 뒤 id가 채워져 돌아온다.
@@ -58,6 +64,18 @@ export class ReadingRecordsService {
 
     if (updateReadingRecordDto.author !== undefined) {
       readingRecord.author = updateReadingRecordDto.author;
+    }
+
+    if (updateReadingRecordDto.status !== undefined) {
+      readingRecord.status = updateReadingRecordDto.status;
+    }
+
+    // rating은 undefined와 null의 뜻이 다르다.
+    //   undefined → 요청에 없었다   → 손대지 않는다
+    //   null      → 지우라고 보냈다 → 반영한다
+    // 그래서 null까지 걸러내는 `?? `가 아니라 undefined만 걸러내는 비교를 쓴다.
+    if (updateReadingRecordDto.rating !== undefined) {
+      readingRecord.rating = updateReadingRecordDto.rating;
     }
 
     // id가 이미 있는 엔티티라 save는 INSERT가 아니라 UPDATE를 실행한다.
