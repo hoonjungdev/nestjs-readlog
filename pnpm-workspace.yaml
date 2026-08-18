@@ -1,4 +1,13 @@
+# pnpm은 보안상 의존성의 설치 스크립트(postinstall)를 기본으로 차단한다.
+# 여기 true로 적은 패키지만 예외로 실행된다.
 allowBuilds:
-  # better-sqlite3는 네이티브 모듈이라 설치 스크립트로 바이너리를 준비해야 동작한다.
-  better-sqlite3: true
+  # Prisma는 마이그레이션을 실행하는 네이티브 엔진 바이너리를 postinstall로 내려받는다.
+  # 막아두면 `prisma migrate`가 엔진을 찾지 못해 실패한다.
+  '@prisma/engines': true
+  prisma: true
+  # 아래 셋은 testcontainers가 도커와 통신하며 쓰는 선택적 네이티브 가속 모듈이다.
+  # 빌드하지 않아도 순수 JS로 동작하므로 켜지 않는다.
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
   unrs-resolver: true

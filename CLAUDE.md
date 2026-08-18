@@ -101,7 +101,7 @@ NestJS 기능을 설명할 때 관련된 기반 개념을 함께 연결합니다
 - 처음부터 복잡한 계층, 저장소 패턴, CQRS, 마이크로서비스를 적용하지 않습니다.
 - 중복 제거보다 읽기 쉬운 코드가 더 중요할 수 있음을 고려합니다.
 
-독서 기록 도메인의 구체적인 필드와 규칙은 사용자가 정합니다. 결정되지 않은 요구사항을 임의로 확정하지 말고, 학습을 진행하는 데 필요한 최소한의 가정만 사용합니다. 데이터베이스/ORM도 아직 선택되지 않았으므로 특정 기술을 임의로 가정하지 않습니다.
+독서 기록 도메인의 구체적인 필드와 규칙은 사용자가 정합니다. 결정되지 않은 요구사항을 임의로 확정하지 말고, 학습을 진행하는 데 필요한 최소한의 가정만 사용합니다. 데이터베이스와 ORM은 PostgreSQL + Prisma로 확정되어 있습니다.
 
 ## JavaScript와 TypeScript 지침
 
@@ -133,7 +133,7 @@ NestJS 기능을 설명할 때 관련된 기반 개념을 함께 연결합니다
 
 ## 데이터베이스 지침
 
-- ORM과 데이터베이스는 사용자가 선택하기 전까지 임의로 확정하지 않습니다.
+- 데이터베이스는 PostgreSQL, ORM은 Prisma입니다. 로컬 DB는 도커 컴포즈로 띄웁니다.
 - 스키마 변경은 마이그레이션으로 재현 가능하게 관리합니다.
 - ID, 날짜와 시간, nullable 여부, 유니크 제약조건을 명시적으로 결정합니다.
 - 삭제 방식, 연관 관계, 트랜잭션은 도메인 규칙과 함께 설명합니다.
@@ -186,7 +186,9 @@ NestJS 기능을 설명할 때 관련된 기반 개념을 함께 연결합니다
 패키지 매니저는 **pnpm**입니다 (package.json의 `packageManager` 참고).
 
 ```bash
-pnpm install          # 의존성 설치
+pnpm install          # 의존성 설치 (postinstall로 prisma generate가 함께 실행됨)
+pnpm db:up             # PostgreSQL 컨테이너 실행 (준비될 때까지 대기)
+pnpm db:down            # PostgreSQL 컨테이너 정지 (데이터는 유지)
 pnpm start:dev         # 개발 서버 실행 (:3000, watch 모드)
 pnpm build              # nest build로 컴파일
 pnpm lint                # src/apps/libs/test 대상 eslint --fix
@@ -204,20 +206,22 @@ pnpm test -- reading-records.service.spec.ts
 pnpm test -- -t "이름이 일치하는 테스트"
 ```
 
-마이그레이션 (모두 `src/data-source.ts`를 기준으로 동작):
+마이그레이션 (모두 `prisma.config.ts`의 설정을 기준으로 동작):
 
 ```bash
-pnpm migration:generate src/migrations/이름   # 엔티티와 "현재 DB의 실제 상태"의 차이를 SQL로
-pnpm migration:run                            # 밀린 마이그레이션 실행
-pnpm migration:revert                         # 마지막 것의 down() 실행
-pnpm migration:show                           # [X] 실행됨 / [ ] 대기중
+pnpm migrate:dev --name 이름   # 스키마와 DB의 차이를 SQL 파일로 만들고 바로 적용
+pnpm migrate:deploy            # 밀린 마이그레이션 실행 (운영/CI/테스트용)
+pnpm migrate:status            # 적용 여부 확인
+pnpm migrate:reset             # DB를 비우고 처음부터 다시 적용 (데이터 전부 삭제)
+pnpm prisma:generate           # 스키마를 보고 클라이언트 코드 재생성
+pnpm studio                    # 브라우저로 DB 내용 확인
 ```
 
-`generate`는 엔티티 정의만 보고 SQL을 만드는 것이 아니라 **연결된 DB와 비교해 차이를 만듭니다.** 초기 `CREATE TABLE`을 얻으려면 빈 DB를 기준으로 실행해야 합니다 (`DATABASE_PATH=/tmp/gen.sqlite pnpm migration:generate ...`).
+`migrate:dev`는 스키마만 보고 SQL을 만드는 것이 아니라 **연결된 DB와 비교해 차이를 만듭니다.** DB 연결 없이 SQL만 뽑아야 한다면 `prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`를 씁니다 (`--to-schema-datamodel`은 Prisma 7에서 제거된 옛 플래그입니다).
 
 개발 서버는 **하나만** 띄우세요. `pnpm start:dev`가 여러 개 떠 있으면 파일을 저장할 때마다 각각 재시작합니다.
 
-단위 테스트용 jest 설정은 `package.json`에 인라인으로 들어 있고(`rootDir: "src"`, testRegex `*.spec.ts`), e2e 설정은 `test/jest-e2e.json`이며 `test/*.e2e-spec.ts`를 대상으로 합니다.
+단위 테스트용 jest 설정은 `package.json`에 인라인으로 들어 있고(`rootDir: "src"`, testRegex `*.spec.ts`), e2e 설정은 `test/jest-e2e.json`이며 `test/*.e2e-spec.ts`를 대상으로 합니다. **두 테스트 모두 도커가 실행 중이어야 합니다** (Testcontainers).
 
 ## 아키텍처
 
@@ -229,22 +233,25 @@ Nest CLI 표준 구조를 따르며, 기능(feature) 단위 모듈로 구성됩�
 main.ts → AppModule → ReadingRecordsModule
   → ReadingRecordsController (HTTP 계층: 파라미터/바디 파싱, 상태 코드)
   → ReadingRecordsService (비즈니스 로직)
-  → Repository<ReadingRecord> (TypeORM, SQLite)
+  → PrismaService (Prisma Client, PostgreSQL)
 ```
 
 - `AppModule`(`src/app.module.ts`)은 기능 모듈들을 import할 뿐, 독서 기록 관련 로직을 직접 갖고 있지 않습니다.
 - 각 기능 모듈은 Nest DI를 통해 자체 `Controller` + `Service`를 구성합니다 — 컨트롤러는 얇게 유지하고(입력 파싱, 서비스 호출, 결과 반환), 서비스를 `new`로 직접 생성하지 않습니다.
-- `ReadingRecordsService`(`src/reading-records/reading-records.service.ts`)는 `@InjectRepository(ReadingRecord)`로 TypeORM `Repository`를 주입받아 SQLite에 저장합니다. 모든 메서드가 `async`이며 `Promise`를 반환합니다.
-- `ReadingRecord`(`src/reading-records/reading-record.entity.ts`)는 테이블 구조이자 현재의 응답 형태이고, `src/reading-records/dto/` 아래 DTO들은 API 입력 형태를 표현합니다. 필드가 겹치지만 서로 별개의 개념으로 유지됩니다 — 아직 응답 전용 타입은 분리하지 않았습니다.
-- `ReadingStatus`(`src/reading-records/reading-status.enum.ts`)는 유니온 타입이 아니라 `enum`입니다. `@IsEnum()`과 DB의 CHECK 제약이 런타임에 값 목록을 필요로 하므로, 값을 여기 한 곳에만 두기 위한 선택입니다.
-- 존재하지 않는 리소스 조회 시 서비스에서 곧바로 Nest의 `NotFoundException`을 던집니다 — 아직 커스텀 예외 필터는 없습니다.
+- `ReadingRecordsService`(`src/reading-records/reading-records.service.ts`)는 `PrismaService`를 생성자 주입으로 받아 `this.prisma.readingRecord.*`로 질의합니다. 테이블별 `Repository`가 아니라 클라이언트 하나가 모든 모델을 담당합니다. 모든 메서드가 `async`이며 `Promise`를 반환합니다.
+- `prisma/schema.prisma`가 테이블 구조와 타입의 **단일 원본**입니다. 손으로 쓰는 엔티티 클래스는 없습니다. `prisma generate`가 `src/generated/prisma`에 타입과 질의 함수를 만들어냅니다 — 이 폴더는 gitignore 대상이며 절대 직접 수정하지 않습니다.
+- 응답에 쓰는 `ReadingRecord` 타입과 `ReadingStatus` 값 목록은 모두 `src/generated/prisma/client`에서 import합니다. `src/reading-records/dto/` 아래 DTO들은 여전히 API 입력 형태를 따로 표현합니다 — 아직 응답 전용 타입은 분리하지 않았습니다.
+- `ReadingStatus`의 멤버 이름이 `want_to_read`처럼 소문자인 것은 의도입니다. Prisma는 enum 멤버 이름을 그대로 JSON 값으로 내보내므로, `WantToRead`로 바꾸면 API 응답 값이 바뀝니다 (`@map`은 DB 저장값만 바꾸고 JSON 값은 바꾸지 않습니다).
+- 존재하지 않는 리소스 조회 시 서비스에서 곧바로 Nest의 `NotFoundException`을 던집니다 — 아직 커스텀 예외 필터는 없습니다. `update`/`remove`가 먼저 `findOne`을 호출하는 이유가 이것입니다. 생략하면 Prisma의 `P2025` 오류가 그대로 새어 나가 404가 아닌 500이 됩니다.
 - 전역 `ValidationPipe`는 `main.ts`가 아니라 `AppModule`에 `APP_PIPE`로 등록되어 있습니다(`whitelist`, `forbidNonWhitelisted`). `main.ts`에 두면 e2e 테스트에는 적용되지 않아 테스트 환경과 실제 환경이 갈라지기 때문입니다.
 
 ### 데이터베이스와 마이그레이션
 
-- DB 설정은 `src/data-source.ts` 한 곳에만 있습니다. `AppModule`과 TypeORM CLI가 같은 설정을 보게 하기 위해서이니, `app.module.ts`에 접속 설정을 따로 적지 마세요.
-- 스키마는 마이그레이션이 책임집니다. `synchronize`는 앱과 테스트 모두에서 꺼져 있습니다.
-- 마이그레이션은 경로 패턴(glob)이 아니라 **클래스를 직접 import해서** `migrations` 배열에 등록합니다. 새 마이그레이션을 만들면 `data-source.ts`에 손으로 추가해야 합니다.
-- `migrationsRun`은 **메모리 DB일 때만** 켜집니다(`isInMemoryDatabase`). 파일 DB에서 켜두면 앱 인스턴스가 여러 개일 때 같은 마이그레이션이 중복 실행되어 데이터가 사라질 수 있습니다(실제로 겪은 사고 — `docs/learning/06-필드-추가와-마이그레이션.md` 참고). 개발/운영에서는 `pnpm migration:run`으로 직접 실행합니다.
-- 엔티티의 `default`와 DB 스키마의 `DEFAULT`는 일하는 순간이 다릅니다. 앱이 INSERT할 때 값을 채우는 것은 **엔티티의 `default`**이며, 이것을 지우면 TypeORM이 `NULL`을 명시해 넣어 `NOT NULL` 제약에 걸립니다.
-- `undefined`와 `null`을 구분합니다. PATCH에서 필드가 없으면(`undefined`) 손대지 않고, `null`이면 값을 비웁니다. 서비스에서 `??` 대신 `!== undefined`를 쓰는 이유입니다.
+- 접속 정보는 `DATABASE_URL` 환경 변수 하나입니다. `prisma.config.ts`(CLI용)와 `PrismaService`(앱용)가 같은 값을 읽습니다. `AppModule`에는 DB 설정이 전혀 없습니다.
+- **Prisma 7 기준입니다.** 인터넷의 대다수 자료(v5/v6)와 다릅니다: 접속 URL이 `schema.prisma`가 아니라 `prisma.config.ts`에 있고, 생성기는 `prisma-client-js`가 아니라 `prisma-client`이며, `@prisma/adapter-pg` 드라이버 어댑터를 반드시 넘겨야 하고, `.env`는 자동으로 읽히지 않습니다(`import 'dotenv/config'`).
+- 생성기에 `moduleFormat = "cjs"`와 `importFileExtension = ""`가 지정되어 있습니다. 빼면 Prisma가 ESM 코드를 만들어내고, CommonJS인 이 프로젝트에서 `import.meta` 때문에 컴파일이 깨집니다.
+- 스키마는 마이그레이션이 책임집니다. `prisma db push`는 쓰지 않습니다 — 그러면 마이그레이션 파일이 틀려도 테스트가 통과해버립니다.
+- 마이그레이션을 어딘가에 **등록할 필요가 없습니다.** Prisma가 `prisma/migrations` 폴더를 이름순으로 읽습니다. 대신 순수 SQL 파일이라 `down()`이 없습니다.
+- 앱이 시작할 때 마이그레이션을 자동 실행하지 **않습니다.** 앱 인스턴스가 여러 개면 중복 실행되어 데이터가 사라질 수 있습니다(실제로 겪은 사고 — `docs/learning/06-필드-추가와-마이그레이션.md` 참고). 개발에서는 `pnpm migrate:dev`, 테스트에서는 컨테이너를 띄운 직후 `migrate deploy`를 한 번 실행합니다.
+- `undefined`와 `null`은 여전히 다른 뜻입니다. PATCH에서 필드가 없으면(`undefined`) 손대지 않고, `null`이면 값을 비웁니다. **Prisma의 `update`가 이 규칙을 그대로 갖고 있어서** 서비스에서 필드마다 `!== undefined`를 확인하던 코드는 사라졌습니다. 규칙 자체는 테스트로 계속 못박아 둡니다.
+- 테스트는 Testcontainers로 PostgreSQL 컨테이너를 띄웁니다(`test/postgres-container.ts`). 컨테이너는 파일당 하나(`beforeAll`), 테스트 간 격리는 `TRUNCATE ... RESTART IDENTITY`(`beforeEach`)로 얻습니다. `RESTART IDENTITY`가 빠지면 id가 1부터 시작한다고 기대하는 테스트들이 깨집니다.

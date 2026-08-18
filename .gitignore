@@ -13,10 +13,10 @@ coverage/
 # logs
 *.log
 
-# local database files
-*.sqlite
-
 # editor and operating system files
 .DS_Store
 .idea/
 .vscode/
+
+# Prisma가 스키마를 보고 만들어내는 코드 (pnpm install 시 자동 생성)
+src/generated/

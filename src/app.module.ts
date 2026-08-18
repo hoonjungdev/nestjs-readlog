@@ -1,32 +1,16 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_PIPE } from '@nestjs/core';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { dataSourceOptions, isInMemoryDatabase } from './data-source';
 import { ReadingRecordsModule } from './reading-records/reading-records.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forRoot({
-      // DB 접속 설정은 data-source.ts 한 곳에만 둔다.
-      // 앱과 TypeORM CLI가 같은 설정을 보게 하기 위해서다.
-      ...dataSourceOptions,
-      // 앱이 시작할 때 아직 실행되지 않은 마이그레이션을 자동으로 실행할지 여부.
-      //
-      // 메모리 DB(테스트)에서만 켠다. 테스트는 앱이 뜰 때마다 빈 DB를 새로 받으므로
-      // 자동 실행이 없으면 테이블 자체가 없다.
-      //
-      // 파일 DB(개발/운영)에서는 끈다. 앱이 여러 개 떠 있으면 각자 재시작하면서
-      // 같은 마이그레이션을 중복 실행하는데, TypeORM은 이력 테이블만 보고 판단하므로
-      // 거의 동시에 시작하면 둘 다 "아직 안 돌았다"고 오판한다.
-      // 이번 단계에서 실제로 겪었다 — 이력에 같은 마이그레이션이 두 번 기록됐고,
-      // SQLite의 컬럼 추가는 "테이블 재생성 + 복사"라 중복 실행되면 새 컬럼 값이 날아간다.
-      // 파일 DB에는 `pnpm migration:run`으로 직접 실행한다.
-      migrationsRun: isInMemoryDatabase,
-    }),
-    ReadingRecordsModule,
-  ],
+  // TypeOrmModule.forRoot(...)가 있던 자리다.
+  // Prisma에는 "루트에서 DB 연결을 설정하는 모듈"이라는 개념이 없다.
+  // 접속 정보는 PrismaService가 DATABASE_URL에서 직접 읽고,
+  // DB가 필요한 기능 모듈이 각자 PrismaModule을 import한다.
+  // 그래서 AppModule은 DB에 대해 아무것도 알 필요가 없어졌다.
+  imports: [ReadingRecordsModule],
   controllers: [AppController],
   providers: [
     AppService,

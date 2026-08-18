@@ -1,0 +1,55 @@
+// 이 파일 하나가 "테이블 구조"이자 "타입스크립트 타입의 원본"이다.
+//
+// TypeORM에서는 엔티티 클래스에 @Column 데코레이터를 붙여 두 가지를 동시에 표현했다.
+// Prisma는 자체 문법의 이 파일에 적어두면, prisma generate가 읽어서
+// 타입스크립트 코드(타입 + 쿼리 함수)를 자동으로 만들어준다.
+// 즉 우리가 손으로 쓰는 엔티티 클래스는 더 이상 없다.
+
+generator client {
+  // Prisma 7부터의 새 생성기. 예전 자료에 나오는 "prisma-client-js"가 아니다.
+  provider = "prisma-client"
+  // 생성 결과를 둘 위치. 7부터는 필수다.
+  // src 안에 두면 nest build가 함께 컴파일하므로 별도 설정이 필요 없다.
+  output   = "../src/generated/prisma"
+  // 이 프로젝트(NestJS 기본값)는 CommonJS로 돌아간다.
+  // 지정하지 않으면 Prisma가 ESM으로 코드를 만들어 import.meta 때문에 컴파일이 깨진다.
+  moduleFormat        = "cjs"
+  // 생성된 파일끼리 import할 때 "./enums.js" 대신 "./enums"로 적게 한다.
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+  // 접속 URL은 여기가 아니라 prisma.config.ts에 있다 (Prisma 7의 변경점).
+}
+
+// PostgreSQL에는 SQLite와 달리 진짜 enum 타입이 있다.
+// SQLite에서는 "문자열 컬럼 + CHECK 제약"으로 흉내 냈지만,
+// 여기서는 reading_status라는 타입 자체가 DB에 만들어진다.
+//
+// 멤버 이름을 want_to_read처럼 소문자로 적은 이유:
+// 이 이름이 곧 JSON 응답에 나가는 값이다. WantToRead로 적으면
+// API 응답이 "WantToRead"로 바뀌어 기존 클라이언트와의 약속이 깨진다.
+enum ReadingStatus {
+  want_to_read
+  reading
+  finished
+
+  @@map("reading_status")
+}
+
+model ReadingRecord {
+  // @id = 기본 키, @default(autoincrement()) = DB가 값을 자동으로 매김
+  id     Int           @id @default(autoincrement())
+  title  String
+  author String
+  status ReadingStatus @default(want_to_read)
+  // 타입 뒤의 ?가 "값이 없을 수 있다"는 뜻이다.
+  // TypeORM에서는 nullable: true(DB용)와 number | null(타입용)을 따로 적어야 했는데,
+  // Prisma는 이 물음표 하나로 양쪽이 함께 정해진다.
+  rating Int?
+
+  // 모델 이름은 타입스크립트에서 쓰기 좋게 ReadingRecord로 두되,
+  // 실제 테이블 이름은 기존과 같은 reading_records로 맞춘다.
+  @@map("reading_records")
+}

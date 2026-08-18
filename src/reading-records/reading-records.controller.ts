@@ -10,7 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ReadingRecordsService } from './reading-records.service';
-import { ReadingRecord } from './reading-record.entity';
+import { ReadingRecord } from '../generated/prisma/client';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 

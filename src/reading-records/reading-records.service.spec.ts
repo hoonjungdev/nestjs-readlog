@@ -1,43 +1,48 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
-import { dataSourceOptions } from '../data-source';
-import { ReadingRecord } from './reading-record.entity';
-import { ReadingRecordsService } from './reading-records.service';
+import { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import {
+  resetTestDatabase,
+  startTestDatabase,
+} from '../../test/postgres-container';
+import { ReadingStatus } from '../generated/prisma/client';
+import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaService } from '../prisma/prisma.service';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
-import { ReadingStatus } from './reading-status.enum';
+import { ReadingRecordsService } from './reading-records.service';
 
 describe('ReadingRecordsService', () => {
+  let container: StartedPostgreSqlContainer;
   let module: TestingModule;
   let service: ReadingRecordsService;
+  let prisma: PrismaService;
 
-  beforeEach(async () => {
+  // 예전에는 beforeEach마다 새 메모리 DB를 만들었다. 공짜였기 때문이다.
+  // 컨테이너는 띄우는 데 몇 초가 걸리므로 이 파일 전체에서 하나만 쓰고(beforeAll),
+  // 테스트 사이의 격리는 데이터를 비우는 방식으로 얻는다(beforeEach).
+  beforeAll(async () => {
+    container = await startTestDatabase();
+
     module = await Test.createTestingModule({
-      imports: [
-        TypeOrmModule.forRoot({
-          // 앱이 쓰는 설정을 그대로 가져온다. 여기에 DB 설정을 따로 적으면
-          // 앱과 테스트가 서로 다른 스키마를 보게 된다.
-          // 예전에는 synchronize: true로 엔티티에서 테이블을 만들었는데,
-          // 그러면 마이그레이션이 잘못돼 있어도 이 테스트는 통과해버렸다.
-          ...dataSourceOptions,
-          // 메모리에만 존재하는 DB를 쓴다. 테스트마다 새로 만들어지므로
-          // 이전 테스트가 남긴 데이터가 다음 테스트에 영향을 주지 않는다.
-          // 여기서 못을 박아두지 않으면 실수로 개발용 파일 DB에 테스트가 붙는다.
-          database: ':memory:',
-          // 빈 메모리 DB라 테이블이 없다. 마이그레이션이 만들어야 한다.
-          migrationsRun: true,
-        }),
-        TypeOrmModule.forFeature([ReadingRecord]),
-      ],
+      imports: [PrismaModule],
       providers: [ReadingRecordsService],
     }).compile();
 
+    // compile()은 프로바이더를 만들 뿐이고, init()을 불러야 onModuleInit이 실행된다.
+    await module.init();
+
     service = module.get<ReadingRecordsService>(ReadingRecordsService);
+    prisma = module.get<PrismaService>(PrismaService);
   });
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await resetTestDatabase(prisma);
+  });
+
+  afterAll(async () => {
     // 연결을 닫지 않으면 테스트가 끝나도 프로세스가 남는다.
     await module.close();
+    await container.stop();
   });
 
   it('should be defined', () => {
@@ -53,12 +58,12 @@ describe('ReadingRecordsService', () => {
 
       // 반환값이 그대로 응답이 되므로 여기에 기본값이 채워져 있어야 한다.
       // DB에만 들어가고 반환값이 비어 있으면 클라이언트는 status를 못 받는다.
-      expect(createdRecord.status).toBe(ReadingStatus.WantToRead);
+      expect(createdRecord.status).toBe(ReadingStatus.want_to_read);
       expect(createdRecord.rating).toBeNull();
 
       const reloadedRecord = await service.findOne(createdRecord.id);
 
-      expect(reloadedRecord.status).toBe(ReadingStatus.WantToRead);
+      expect(reloadedRecord.status).toBe(ReadingStatus.want_to_read);
       expect(reloadedRecord.rating).toBeNull();
     });
 
@@ -66,16 +71,16 @@ describe('ReadingRecordsService', () => {
       const createdRecord = await service.create({
         title: '클린 코드',
         author: '로버트 C. 마틴',
-        status: ReadingStatus.Finished,
+        status: ReadingStatus.finished,
         rating: 5,
       });
 
-      expect(createdRecord.status).toBe(ReadingStatus.Finished);
+      expect(createdRecord.status).toBe(ReadingStatus.finished);
       expect(createdRecord.rating).toBe(5);
 
       const reloadedRecord = await service.findOne(createdRecord.id);
 
-      expect(reloadedRecord.status).toBe(ReadingStatus.Finished);
+      expect(reloadedRecord.status).toBe(ReadingStatus.finished);
       expect(reloadedRecord.rating).toBe(5);
     });
   });
@@ -112,8 +117,6 @@ describe('ReadingRecordsService', () => {
       const returnedRecord = await service.update(createdRecord.id, updateDto);
 
       // 반환값은 그대로 API 응답이 되므로 반드시 확인해야 한다.
-      // save()가 undefined인 속성을 UPDATE에서 제외하기 때문에
-      // DB만 확인하면 반환값이 오염된 것을 놓친다.
       expect(returnedRecord.title).toBe('클린 코드');
       expect(returnedRecord.author).toBe('Robert C. Martin');
 
@@ -151,18 +154,20 @@ describe('ReadingRecordsService', () => {
       });
 
       const returnedRecord = await service.update(createdRecord.id, {
-        status: ReadingStatus.Reading,
+        status: ReadingStatus.reading,
       });
 
-      expect(returnedRecord.status).toBe(ReadingStatus.Reading);
+      expect(returnedRecord.status).toBe(ReadingStatus.reading);
 
       const reloadedRecord = await service.findOne(createdRecord.id);
 
-      expect(reloadedRecord.status).toBe(ReadingStatus.Reading);
+      expect(reloadedRecord.status).toBe(ReadingStatus.reading);
     });
 
     // undefined와 null이 서로 다른 뜻이라는 것을 못박는 두 테스트.
-    // 이 둘이 함께 있어야 "안 보냄"과 "지워라"가 구분된다는 주장이 성립한다.
+    // 이제 이 구분은 우리 코드가 아니라 Prisma가 해주지만, 그래도 테스트는 남긴다.
+    // 이건 "구현이 이렇게 돼 있다"가 아니라 "API가 이렇게 동작하기로 했다"는 약속이라,
+    // 나중에 ORM을 또 바꾸더라도 계속 지켜져야 하기 때문이다.
     it('keeps the rating when it is not included in the request', async () => {
       const createdRecord = await service.create({
         title: '클린 코드',
@@ -172,7 +177,7 @@ describe('ReadingRecordsService', () => {
 
       // rating 없이 다른 필드만 보낸다 (= undefined)
       const returnedRecord = await service.update(createdRecord.id, {
-        status: ReadingStatus.Finished,
+        status: ReadingStatus.finished,
       });
 
       expect(returnedRecord.rating).toBe(5);
@@ -196,8 +201,7 @@ describe('ReadingRecordsService', () => {
 
       expect(returnedRecord.rating).toBeNull();
 
-      // save()가 undefined를 UPDATE에서 제외한다는 건 이미 알고 있다.
-      // null도 그렇게 무시된다면 DB에는 5가 그대로 남는다. 그래서 반드시 다시 꺼내 본다.
+      // 응답만 맞고 DB는 안 바뀌었을 수 있으므로 다시 꺼내 본다.
       const reloadedRecord = await service.findOne(createdRecord.id);
 
       expect(reloadedRecord.rating).toBeNull();

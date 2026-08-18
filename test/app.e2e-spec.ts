@@ -1,19 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PrismaService } from './../src/prisma/prisma.service';
+import { resetTestDatabase, startTestDatabase } from './postgres-container';
 
 describe('AppController (e2e)', () => {
+  let container: StartedPostgreSqlContainer;
   let app: INestApplication<App>;
+  let prisma: PrismaService;
 
-  beforeEach(async () => {
+  // 예전에는 테스트마다 앱을 새로 만들었다. 그때는 앱이 새로 뜰 때마다
+  // 빈 메모리 DB가 따라 생겨서, 그게 곧 테스트 격리 수단이었다.
+  //
+  // 이제 DB는 컨테이너 하나로 고정이고 앱을 새로 만들어도 데이터가 그대로 남는다.
+  // 그러니 앱도 한 번만 만들고, 격리는 아래 beforeEach에서 데이터를 비워 얻는다.
+  beforeAll(async () => {
+    // 반드시 앱을 만들기 전이어야 한다. PrismaService가 만들어지는 순간
+    // DATABASE_URL을 읽어가기 때문이다.
+    container = await startTestDatabase();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    prisma = app.get(PrismaService);
+  });
+
+  beforeEach(async () => {
+    // 테이블을 비우고 id 카운터도 1로 되돌린다.
+    // 아래 테스트들이 "방금 만든 기록의 id는 1"이라고 기대하고 있다.
+    await resetTestDatabase(prisma);
   });
 
   it('/ (GET)', () => {
@@ -266,7 +288,8 @@ describe('AppController (e2e)', () => {
       .expect(404);
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await app.close();
+    await container.stop();
   });
 });

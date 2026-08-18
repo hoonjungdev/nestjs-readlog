@@ -7,7 +7,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { ReadingStatus } from '../reading-status.enum';
+import { ReadingStatus } from '../../generated/prisma/client';
 
 export class UpdateReadingRecordDto {
   @IsOptional()
@@ -32,7 +32,7 @@ export class UpdateReadingRecordDto {
   //
   // @IsOptional()은 값이 undefined "또는 null"이면 나머지 검증을 건너뛴다.
   // 그래서 null이 @IsInt()에 걸리지 않고 그대로 통과해 서비스까지 온다.
-  // 서비스는 undefined와 null을 구분해서 처리한다.
+  // 그다음은 Prisma가 이 둘을 구분해준다 (undefined = 그대로, null = 비움).
   @IsOptional()
   @IsInt()
   @Min(1)
