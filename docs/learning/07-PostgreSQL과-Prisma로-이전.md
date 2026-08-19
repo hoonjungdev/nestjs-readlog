@@ -1,6 +1,6 @@
 # 07. SQLite + TypeORM → PostgreSQL + Prisma
 
-- 날짜: 2026-08-18
+- 날짜: 2026-08-18 ~ 08-19
 - 관련 커밋: (작업 중)
 
 ## 무엇을 만들었나
@@ -325,11 +325,66 @@ async remove(id: number): Promise<void> {
 
 질의가 두 번 나가서 아깝긴 하다. 나중에 예외 필터를 배우면 `P2025`를 404로 바꿔주는 방법으로 정리할 수 있을 것 같다.
 
+### 8. PostgreSQL 18은 볼륨 경로가 다르다
+
+도커를 설치하고 `pnpm db:up`을 처음 돌렸더니 컨테이너가 뜨자마자 죽고 재시작을 반복했다.
+
+```text
+container readlog-postgres is unhealthy
+```
+
+이 메시지만으로는 아무것도 알 수 없다. **로그를 봐야 한다.**
+
+```bash
+docker compose logs postgres
+```
+
+```text
+Error: in 18+, these Docker images are configured to store database data in a
+       format which is compatible with "pg_ctlcluster" ...
+       Counter to that, there appears to be PostgreSQL data in:
+         /var/lib/postgresql/data (unused mount/volume)
+```
+
+내가 쓴 마운트 경로가 **17 이하의 관례**였다.
+
+| 버전 | 마운트할 경로 |
+| --- | --- |
+| 17 이하 | `/var/lib/postgresql/data` |
+| **18 이상** | `/var/lib/postgresql` |
+
+18부터는 이미지가 그 폴더 안에 `18/docker` 같은 **버전별 하위 폴더**를 스스로 만든다. 그래야 나중에 `pg_upgrade`로 메이저 버전을 올릴 때 마운트 지점 경계에 걸리지 않기 때문이다.
+
+인터넷 예제는 거의 다 옛 경로다. Prisma 7에서 겪은 것과 **정확히 같은 종류의 함정**이다 — 최근에 바뀐 것은 검색 결과가 아직 못 따라온다.
+
+### 9. Jest가 Prisma의 WASM 모듈을 못 읽는다
+
+컨테이너와 마이그레이션이 다 성공했는데 단위 테스트가 13개 전부 깨졌다.
+
+```text
+TypeError: A dynamic import callback was invoked without --experimental-vm-modules
+  at getRuntime: async () => await import("@prisma/client/runtime/query_compiler_fast_bg.postgresql.js")
+```
+
+스택을 따라가 보니 `onModuleInit`의 `$connect()`에서 났다. 즉 **Prisma가 시작하는 순간**이다.
+
+원인은 이렇다. Prisma 7은 SQL을 만들어내는 **쿼리 컴파일러를 WebAssembly 모듈**로 갖고 있고, 그걸 동적 `import()`로 불러온다. 그런데 Jest가 테스트를 돌리는 격리된 실행 환경(CommonJS VM)은 동적 ESM import를 기본으로 지원하지 않는다.
+
+> **WebAssembly(WASM)**: 브라우저와 Node.js에서 돌아가는 저수준 바이너리 형식. JS보다 빠른 처리가 필요한 부분에 쓴다.
+
+Node에 실험적 플래그를 켜주면 해결된다. `package.json`의 테스트 스크립트 전부에 붙였다.
+
+```json
+"test": "NODE_OPTIONS=--experimental-vm-modules jest"
+```
+
+실행할 때마다 `ExperimentalWarning`이 뜨지만 정상이다.
+
+**여기서 배운 것**: 오류 메시지가 `prisma.service.ts:36`을 가리켰지만 내가 쓴 그 줄(`await this.$connect()`)이 틀린 게 아니었다. 그 줄이 **불러들인 라이브러리 안쪽**에서 난 문제였다. 스택 트레이스는 "어디서 터졌나"를 보여줄 뿐 "누가 잘못했나"를 알려주지 않는다.
+
 ## 어떻게 확인했나
 
-도커를 아직 설치하지 못해서, 확인은 두 단계로 나뉘었다.
-
-**도커 없이 확인한 것:**
+먼저 도커 없이 확인할 수 있는 데까지 갔다.
 
 ```bash
 pnpm exec tsc --noEmit    # 타입 검사 — 통과
@@ -337,17 +392,31 @@ pnpm lint                 # 린트 — 통과
 pnpm build                # 빌드 — 통과
 ```
 
-**도커 설치 후 확인할 것:**
+**여기까지 전부 통과했는데도 테스트를 돌리자 13개가 깨졌다** (위 9번). 타입 검사 통과는 "코드가 문법적으로 맞물린다"까지만 뜻한다. 3단계에서 배운 그것과 같다 — **타입은 컴파일 시점, 실행은 런타임.** 이번엔 그 간격을 아주 실감 나게 겪었다.
+
+도커를 설치한 뒤, 볼륨까지 지우고 완전히 빈 상태에서 README에 적은 순서 그대로 다시 밟았다.
 
 ```bash
-pnpm db:up
-pnpm migrate:deploy
-pnpm test          # 단위 테스트
-pnpm test:e2e      # e2e 테스트
-pnpm start:dev     # 실제 요청으로 CRUD 확인
+docker compose down -v     # 볼륨까지 삭제
+pnpm db:up                 # Healthy
+pnpm migrate:deploy        # 마이그레이션 적용됨
+pnpm test                  # 15개 통과
+pnpm test:e2e              # 18개 통과
 ```
 
-타입 검사가 통과했다는 건 "코드가 문법적으로 맞물린다"까지만 뜻한다. **SQL이 실제로 도는지는 별개다.** 이 구분은 3단계에서 배운 그것과 같다 — 타입은 컴파일 시점, 실행은 런타임.
+그리고 서버를 띄워 실제 요청으로 CRUD를 한 바퀴 돌렸다. 특히 6단계의 주제였던 `undefined`/`null` 구분이 진짜 지켜지는지 봤다.
+
+```bash
+# rating을 보내지 않으면 → 유지된다
+curl -X PATCH localhost:3000/reading-records/2 -d '{"author":"Robert C. Martin"}' ...
+# → {"id":2, ..., "rating":5}
+
+# rating: null 을 보내면 → 비워진다
+curl -X PATCH localhost:3000/reading-records/2 -d '{"rating":null}' ...
+# → {"id":2, ..., "rating":null}
+```
+
+응답 JSON이 SQLite 시절과 **글자 하나 다르지 않다.** 저장 계층을 통째로 갈아끼웠는데 바깥에서는 아무 일도 없었다는 게 이번 단계의 결론이다.
 
 ## 아직 모르는 것
 
@@ -356,3 +425,4 @@ pnpm start:dev     # 실제 요청으로 CRUD 확인
 - **`P2025` 같은 Prisma 오류를 예외 필터로 한 번에 처리하기.** 지금은 `findOne`을 먼저 부르는 방식으로 피해 갔다.
 - **테스트가 느려지면 어떻게 하나.** 지금은 파일이 둘뿐이라 컨테이너를 두 번 띄우면 되지만, 파일이 열 개가 되면 어떻게 하지?
 - **운영에서는 마이그레이션을 언제 실행하나.** 앱 시작 시 자동 실행이 위험하다는 건 6단계에서 겪었는데, 그럼 배포 파이프라인 어디에 넣는 게 맞는지 모르겠다.
+- **한 번 보고 재현되지 않은 403.** e2e를 처음 돌렸을 때 "잘못된 status에 400을 기대했는데 403이 왔다"며 딱 하나가 실패했다. 그 뒤로 같은 코드로 여섯 번 넘게 돌렸지만 다시 나오지 않았고, 단독 실행·실제 서버 요청 모두 정상적으로 400이었다. 우리 코드에는 403을 던지는 곳이 아예 없다. **원인을 못 찾았다.** 다시 나오면 그때 잡기로 하고 여기 적어둔다. 재현되지 않는다고 없던 일로 치지는 않는다.

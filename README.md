@@ -315,6 +315,8 @@ SQLite를 쓸 때는 `:memory:`라는 공짜 격리 수단이 있었습니다. �
 
 컨테이너를 처음 띄울 때는 PostgreSQL 이미지를 내려받느라 오래 걸릴 수 있습니다. 그래서 테스트 제한 시간을 180초로 늘려두었습니다.
 
+테스트 스크립트에 `NODE_OPTIONS=--experimental-vm-modules`가 붙어 있습니다. Prisma 7은 SQL을 만들어내는 쿼리 컴파일러를 WebAssembly 모듈로 갖고 있고 그걸 동적 `import()`로 불러오는데, Jest의 기본 실행 환경은 이를 지원하지 않기 때문입니다. 이 플래그가 없으면 Prisma가 시작하는 순간(`$connect()`) 테스트가 전부 깨집니다. 실행할 때 뜨는 `ExperimentalWarning`은 정상입니다.
+
 전역 `ValidationPipe`는 `main.ts`가 아니라 `AppModule`에 등록되어 있습니다. `main.ts`에 두면 그 파일을 실행하지 않는 e2e 테스트에는 검증이 걸리지 않아, 테스트는 통과하는데 실제 서버는 다르게 동작하는 상황이 생깁니다 ([04번 노트](./docs/learning/04-e2e-테스트.md) 참고).
 
 ## 학습 로드맵

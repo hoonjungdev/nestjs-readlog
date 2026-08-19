@@ -223,6 +223,8 @@ pnpm studio                    # 브라우저로 DB 내용 확인
 
 단위 테스트용 jest 설정은 `package.json`에 인라인으로 들어 있고(`rootDir: "src"`, testRegex `*.spec.ts`), e2e 설정은 `test/jest-e2e.json`이며 `test/*.e2e-spec.ts`를 대상으로 합니다. **두 테스트 모두 도커가 실행 중이어야 합니다** (Testcontainers).
 
+모든 테스트 스크립트에 `NODE_OPTIONS=--experimental-vm-modules`가 붙어 있습니다. Prisma 7의 WASM 쿼리 컴파일러가 동적 `import()`로 로드되는데 Jest 기본 환경이 이를 지원하지 않기 때문입니다. 떼면 `$connect()` 시점에 `A dynamic import callback was invoked without --experimental-vm-modules`로 전부 실패합니다. `jest` 명령을 직접 호출할 때도 이 환경 변수를 함께 넘겨야 합니다.
+
 ## 아키텍처
 
 Nest CLI 표준 구조를 따르며, 기능(feature) 단위 모듈로 구성됩니다 (현재는 `reading-records`만 존재하며, 위 프로젝트 설계 원칙에 따라 도메인이 커지면 `books` 같은 형제 모듈이 추가될 것으로 예상됩니다).
@@ -254,4 +256,5 @@ main.ts → AppModule → ReadingRecordsModule
 - 마이그레이션을 어딘가에 **등록할 필요가 없습니다.** Prisma가 `prisma/migrations` 폴더를 이름순으로 읽습니다. 대신 순수 SQL 파일이라 `down()`이 없습니다.
 - 앱이 시작할 때 마이그레이션을 자동 실행하지 **않습니다.** 앱 인스턴스가 여러 개면 중복 실행되어 데이터가 사라질 수 있습니다(실제로 겪은 사고 — `docs/learning/06-필드-추가와-마이그레이션.md` 참고). 개발에서는 `pnpm migrate:dev`, 테스트에서는 컨테이너를 띄운 직후 `migrate deploy`를 한 번 실행합니다.
 - `undefined`와 `null`은 여전히 다른 뜻입니다. PATCH에서 필드가 없으면(`undefined`) 손대지 않고, `null`이면 값을 비웁니다. **Prisma의 `update`가 이 규칙을 그대로 갖고 있어서** 서비스에서 필드마다 `!== undefined`를 확인하던 코드는 사라졌습니다. 규칙 자체는 테스트로 계속 못박아 둡니다.
+- 도커 컴포즈의 볼륨은 `/var/lib/postgresql`에 마운트합니다. **`/var/lib/postgresql/data`가 아닙니다** — PostgreSQL 18부터 이미지가 그 안에 버전별 하위 폴더를 직접 만드는 방식으로 바뀌었고, 옛 경로를 쓰면 컨테이너가 기동 직후 죽고 재시작을 반복합니다(인터넷 예제는 대부분 옛 경로입니다).
 - 테스트는 Testcontainers로 PostgreSQL 컨테이너를 띄웁니다(`test/postgres-container.ts`). 컨테이너는 파일당 하나(`beforeAll`), 테스트 간 격리는 `TRUNCATE ... RESTART IDENTITY`(`beforeEach`)로 얻습니다. `RESTART IDENTITY`가 빠지면 id가 1부터 시작한다고 기대하는 테스트들이 깨집니다.
