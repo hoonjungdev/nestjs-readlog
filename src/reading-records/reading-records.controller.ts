@@ -8,11 +8,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ReadingRecordsService } from './reading-records.service';
 import { ReadingRecord } from '../generated/prisma/client';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
+import { FindReadingRecordsDto } from './dto/find-reading-records.dto';
 
 @Controller('reading-records')
 export class ReadingRecordsController {
@@ -26,8 +28,8 @@ export class ReadingRecordsController {
   }
 
   @Get()
-  findAll(): Promise<ReadingRecord[]> {
-    return this.readingRecordsService.findAll();
+  findAll(@Query() query: FindReadingRecordsDto): Promise<ReadingRecord[]> {
+    return this.readingRecordsService.findAll(query.status);
   }
 
   @Get(':id')

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ReadingRecord } from '../generated/prisma/client';
+import { ReadingRecord, ReadingStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
@@ -30,12 +30,13 @@ export class ReadingRecordsService {
     });
   }
 
-  async findAll(): Promise<ReadingRecord[]> {
+  async findAll(status?: ReadingStatus): Promise<ReadingRecord[]> {
     return this.prisma.readingRecord.findMany({
       // PostgreSQL은 ORDER BY가 없으면 행의 순서를 보장하지 않는다.
       // (SQLite에서는 우연히 넣은 순서대로 나왔을 뿐이다.)
       // 응답 순서가 들쭉날쭉해지지 않도록 명시한다.
       orderBy: { id: 'asc' },
+      where: { status },
     });
   }
 
