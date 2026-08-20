@@ -21,5 +21,9 @@
     "noImplicitAny": true,
     "strictBindCallApply": true,
     "noFallthroughCasesInSwitch": true
-  }
+  },
+  // frontend/는 별도의 pnpm 워크스페이스 패키지라 자기 tsconfig.json을 따로 갖는다.
+  // 여기서 제외하지 않으면 백엔드 tsconfig가 frontend/src의 .ts 파일까지 끌어들여서
+  // (Vite 전용 moduleResolution 설정과 충돌해) 컴파일 에러가 난다.
+  "exclude": ["node_modules", "dist", "frontend"]
 }

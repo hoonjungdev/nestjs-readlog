@@ -1,3 +1,10 @@
+# 이 저장소는 두 개의 패키지로 이루어진 워크스페이스다.
+#   - 루트(readlog-api): NestJS 백엔드. 워크스페이스 루트 자체라 여기 적을 필요는 없다.
+#   - frontend: Svelte + Vite 프론트엔드.
+# 하나의 pnpm install로 두 패키지의 의존성을 함께 설치할 수 있다.
+packages:
+  - 'frontend'
+
 # pnpm은 보안상 의존성의 설치 스크립트(postinstall)를 기본으로 차단한다.
 # 여기 true로 적은 패키지만 예외로 실행된다.
 allowBuilds:
