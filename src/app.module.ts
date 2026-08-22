@@ -22,9 +22,15 @@ import { ReadingRecordsModule } from './reading-records/reading-records.module';
       useValue: new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
-        // 쿼리 파라미터(page, limit)를 @Type(() => Number)가 숫자로 바꾼 뒤,
-        // 그 변환된 값이 컨트롤러에 실제로 전달되도록 한다. 이게 꺼져 있으면
-        // 검증은 통과해도 컨트롤러는 여전히 문자열("1")을 받는다.
+        // 쿼리 파라미터(page, limit)의 @Type(() => Number) 변환 결과가
+        // 컨트롤러까지 전달되게 하려는 의도를 명시한 것이다.
+        //
+        // 사실 이 옵션이 없어도 지금은 변환이 된다. ValidationPipe는 transform이
+        // 꺼져 있어도 validatorOptions의 키가 1개보다 많으면 classToPlain(entity)를
+        // 반환하는데, 생성자가 forbidUnknownValues를 항상 끼워 넣기 때문에
+        // whitelist 하나만 있어도 이 조건이 성립한다.
+        // 하지만 그건 Nest 내부의 휴리스틱이지 우리가 기대는 계약이 아니다.
+        // 의도를 코드로 남겨서 그 우연에 의존하지 않는다.
         transform: true,
       }),
     },
