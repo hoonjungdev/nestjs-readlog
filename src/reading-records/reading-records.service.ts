@@ -1,9 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ReadingRecord, ReadingStatus } from '../generated/prisma/client';
+import {
+  Prisma,
+  ReadingRecord,
+  ReadingStatus,
+} from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 import { ReadingRecordResponseDto } from './dto/reading-record-response.dto';
+import { SortableField } from './dto/find-reading-records.dto';
 
 // 지금은 findAll() 하나만 쓰지만, 목록 API가 늘어나면 그때마다 재사용한다.
 export interface PaginatedResult<T> {
@@ -11,6 +16,18 @@ export interface PaginatedResult<T> {
   total: number;
   page: number;
   limit: number;
+}
+
+// findAll에 넘길 조건들. 위치 인자로 늘어놓으면
+// findAll(undefined, 1, 10, 'id', 'asc')처럼 읽기도 어렵고
+// 순서를 바꿔 넣어도 타입이 같으면 컴파일러가 못 잡는다.
+// 이름을 붙여서 호출부가 무엇을 넘기는지 드러나게 한다.
+export interface FindAllOptions {
+  status?: ReadingStatus;
+  page?: number;
+  limit?: number;
+  sort?: SortableField;
+  order?: Prisma.SortOrder;
 }
 
 @Injectable()
@@ -62,12 +79,20 @@ export class ReadingRecordsService {
     return this.toResponse(createdRecord);
   }
 
-  async findAll(
-    status?: ReadingStatus,
+  async findAll({
+    status,
     page = 1,
     limit = 10,
-  ): Promise<PaginatedResult<ReadingRecordResponseDto>> {
+    sort = 'id',
+    order = 'asc',
+  }: FindAllOptions = {}): Promise<PaginatedResult<ReadingRecordResponseDto>> {
     const where = { status };
+
+    // sort는 DTO의 @IsIn(SORTABLE_FIELDS)를 통과한 값만 여기 도달한다.
+    // 그래서 컬럼 이름을 그대로 키로 써도 안전하다.
+    const orderBy: Prisma.ReadingRecordOrderByWithRelationInput = {
+      [sort]: order,
+    };
 
     // findMany와 count는 서로의 결과를 기다릴 필요가 없는 독립적인 쿼리라
     // Promise.all로 동시에 보낸다. 순서대로 await 하면 두 번째 쿼리가
@@ -78,7 +103,7 @@ export class ReadingRecordsService {
         // (SQLite에서는 우연히 넣은 순서대로 나왔을 뿐이다.)
         // 응답 순서가 들쭉날쭉해지지 않도록 명시한다. 페이지네이션에서는
         // 이게 없으면 페이지마다 순서가 달라져 같은 행이 중복되거나 빠질 수 있다.
-        orderBy: { id: 'asc' },
+        orderBy,
         where,
         skip: (page - 1) * limit,
         take: limit,

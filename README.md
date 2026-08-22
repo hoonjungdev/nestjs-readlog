@@ -180,7 +180,7 @@ src/main.ts
 | --- | --- | --- | --- |
 | 독서 기록 생성 | `POST` | `/reading-records` | `201 Created` |
 | 독서 기록 목록 조회 | `GET` | `/reading-records` | `200 OK` |
-| ↳ 필터·페이지네이션 | `GET` | `/reading-records?status=&page=&limit=` | `200 OK` |
+| ↳ 필터·페이지네이션·정렬 | `GET` | `/reading-records?status=&page=&limit=&sort=&order=` | `200 OK` |
 | 독서 기록 상세 조회 | `GET` | `/reading-records/:id` | `200 OK` |
 | 독서 기록 수정 | `PATCH` | `/reading-records/:id` | `200 OK` |
 | 독서 기록 삭제 | `DELETE` | `/reading-records/:id` | `204 No Content` |
@@ -239,9 +239,11 @@ curl -X POST http://localhost:3000/reading-records \
 | `status` | 없음 (전체) | `want_to_read` \| `reading` \| `finished` 중 하나로 거릅니다 |
 | `page` | `1` | 몇 번째 페이지인지. 1 이상의 정수 |
 | `limit` | `10` | 한 페이지에 몇 건인지. 1~100 사이의 정수 |
+| `sort` | `id` | 정렬 기준 컬럼. `id` \| `title` \| `author` \| `status` \| `rating` 중 하나 |
+| `order` | `asc` | 정렬 방향. `asc` \| `desc` |
 
 ```bash
-curl "http://localhost:3000/reading-records?status=reading&page=1&limit=2"
+curl "http://localhost:3000/reading-records?status=reading&page=1&limit=2&sort=title&order=desc"
 ```
 
 응답은 배열이 아니라 목록과 함께 페이지 정보를 담은 객체입니다.
@@ -264,6 +266,12 @@ curl "http://localhost:3000/reading-records?status=reading&page=1&limit=2"
 ```
 
 `total`은 **`status` 조건에 맞는 전체 건수**입니다(현재 페이지의 건수가 아닙니다). 마지막 페이지인지 판단하려면 이 값을 씁니다 — `page * limit >= total`이면 마지막 페이지입니다.
+
+정렬은 페이지를 나누기 **전에** 전체에 적용됩니다. 즉 `?sort=title&order=desc&page=1`은 "전체를 제목 내림차순으로 세운 뒤 앞에서 자른 것"입니다.
+
+`sort`에 위 목록 밖의 값을 보내면 `400`입니다. 정렬 가능한 컬럼을 목록으로 제한하는 이유는, `sort`가 다른 파라미터와 달리 **데이터가 아니라 쿼리의 구조(컬럼 이름)** 를 정하기 때문입니다. 제한하지 않으면 의도하지 않은 컬럼으로 정렬되거나, 없는 컬럼 이름이 그대로 넘어가 `500`이 됩니다.
+
+`rating`으로 내림차순 정렬하면 **별점이 없는(`null`) 기록이 가장 앞에 옵니다.** PostgreSQL이 `ORDER BY`에서 `NULL`을 가장 큰 값으로 취급하기 때문입니다.
 
 ### 수정 — `PATCH /reading-records/:id`
 
@@ -301,6 +309,7 @@ curl -i -X DELETE http://localhost:3000/reading-records/1
 | DTO에 없는 필드를 보냄 (`whitelist` + `forbidNonWhitelisted`) | `400 Bad Request` |
 | `:id`가 숫자가 아님 (`ParseIntPipe`) | `400 Bad Request` |
 | 목록 조회의 `status`가 정해진 값이 아니거나, `page`·`limit`이 정수가 아니거나 범위를 벗어남 | `400 Bad Request` |
+| 목록 조회의 `sort`가 정렬 가능한 컬럼이 아니거나, `order`가 `asc`/`desc`가 아님 | `400 Bad Request` |
 | 존재하지 않는 `id` 조회·수정·삭제 | `404 Not Found` |
 
 검증에 실패하면 어떤 필드가 왜 잘못됐는지 메시지로 함께 돌려줍니다.
@@ -463,5 +472,5 @@ SQLite를 쓸 때는 `:memory:`라는 공짜 격리 수단이 있었습니다. �
   - [x] 목록 조회에 페이지네이션 추가 (`page`, `limit`)
   - [x] 응답 전용 타입 분리 여부 판단 → 분리하기로 결정 (`ReadingRecordResponseDto`)
   - [x] 필터·페이지네이션 e2e 테스트
-  - [ ] 목록 조회에 정렬 추가 검토 (현재는 `id` 오름차순 고정)
+  - [x] 목록 조회에 정렬 추가 (`sort`, `order` — 허용 목록으로 제한)
   - [ ] 읽기 시작일·완료일, 메모 필드 추가 검토

@@ -143,14 +143,59 @@ describe('ReadingRecordsService', () => {
         await service.create({ title: `책${i}`, author: '저자' });
       }
 
-      const firstPage = await service.findAll(undefined, 1, 2);
-      const secondPage = await service.findAll(undefined, 2, 2);
+      const firstPage = await service.findAll({ page: 1, limit: 2 });
+      const secondPage = await service.findAll({ page: 2, limit: 2 });
 
       expect(firstPage.data).toHaveLength(2);
       expect(firstPage.total).toBe(5);
       expect(secondPage.data).toHaveLength(2);
       // 페이지가 다르면 서로 다른 행을 받아야 한다 (같은 행이 중복되면 안 됨).
       expect(firstPage.data[0].id).not.toBe(secondPage.data[0].id);
+    });
+
+    it('sorts by the given field and order', async () => {
+      await service.create({ title: '나', author: '저자' });
+      await service.create({ title: '가', author: '저자' });
+      await service.create({ title: '다', author: '저자' });
+
+      const ascending = await service.findAll({ sort: 'title', order: 'asc' });
+      const descending = await service.findAll({
+        sort: 'title',
+        order: 'desc',
+      });
+
+      expect(ascending.data.map((record) => record.title)).toEqual([
+        '가',
+        '나',
+        '다',
+      ]);
+      expect(descending.data.map((record) => record.title)).toEqual([
+        '다',
+        '나',
+        '가',
+      ]);
+    });
+
+    it('sorts by id ascending by default', async () => {
+      await service.create({ title: '나', author: '저자' });
+      await service.create({ title: '가', author: '저자' });
+
+      const result = await service.findAll();
+
+      expect(result.data.map((record) => record.title)).toEqual(['나', '가']);
+    });
+
+    // rating은 null이 될 수 있는 컬럼이라 정렬 결과가 직관과 다를 수 있다.
+    // PostgreSQL은 ORDER BY에서 NULL을 "가장 큰 값"으로 취급하므로
+    // DESC로 정렬하면 별점 없는 책이 5점짜리보다 앞에 온다.
+    // 지금은 이 동작을 그대로 두되, 무엇이 일어나는지는 못박아 둔다.
+    it('puts records without a rating first when sorting by rating desc', async () => {
+      await service.create({ title: '별점 있음', author: '저자', rating: 5 });
+      await service.create({ title: '별점 없음', author: '저자' });
+
+      const result = await service.findAll({ sort: 'rating', order: 'desc' });
+
+      expect(result.data.map((record) => record.rating)).toEqual([null, 5]);
     });
 
     it('counts total within the filtered status, not the whole table', async () => {
@@ -165,7 +210,7 @@ describe('ReadingRecordsService', () => {
         status: ReadingStatus.finished,
       });
 
-      const result = await service.findAll(ReadingStatus.reading);
+      const result = await service.findAll({ status: ReadingStatus.reading });
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].status).toBe(ReadingStatus.reading);

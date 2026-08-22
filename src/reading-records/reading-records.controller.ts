@@ -34,11 +34,13 @@ export class ReadingRecordsController {
   findAll(
     @Query() query: FindReadingRecordsDto,
   ): Promise<PaginatedResult<ReadingRecordResponseDto>> {
-    return this.readingRecordsService.findAll(
-      query.status,
-      query.page,
-      query.limit,
-    );
+    return this.readingRecordsService.findAll({
+      status: query.status,
+      page: query.page,
+      limit: query.limit,
+      sort: query.sort,
+      order: query.order,
+    });
   }
 
   @Get(':id')

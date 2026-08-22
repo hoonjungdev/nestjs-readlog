@@ -226,6 +226,49 @@ describe('AppController (e2e)', () => {
     expect(body.limit).toBe(2);
   });
 
+  it('/reading-records (GET) sorts by the given field and order', async () => {
+    await createRecords();
+
+    // createRecords가 넣는 제목은 책1, 책2, 책3, 책4 순(= id 순)이다.
+    const ascending = await getList('?sort=title&order=asc');
+    const descending = await getList('?sort=title&order=desc');
+
+    expect(ascending.data.map((record) => record.title)).toEqual([
+      '책1',
+      '책2',
+      '책3',
+      '책4',
+    ]);
+    expect(descending.data.map((record) => record.title)).toEqual([
+      '책4',
+      '책3',
+      '책2',
+      '책1',
+    ]);
+  });
+
+  it('/reading-records (GET) sorts by id ascending when sort is not given', async () => {
+    await createRecords();
+
+    const body = await getList('');
+
+    expect(body.data.map((record) => record.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  // 정렬은 페이지를 나눈 "뒤"가 아니라 "전"에 적용되어야 한다.
+  // 순서가 반대라면 각 페이지 안에서만 정렬되어 전체 순서가 어긋난다.
+  it('/reading-records (GET) sorts across the whole result, not within a page', async () => {
+    await createRecords();
+
+    const firstPage = await getList('?sort=title&order=desc&page=1&limit=2');
+
+    // 전체를 내림차순으로 세운 뒤 자른 것이므로 가장 큰 두 개가 나와야 한다.
+    expect(firstPage.data.map((record) => record.title)).toEqual([
+      '책4',
+      '책3',
+    ]);
+  });
+
   it('/reading-records (GET) combines the status filter with pagination', async () => {
     await createRecords();
 
@@ -253,7 +296,9 @@ describe('AppController (e2e)', () => {
     ['page=1.5', '정수가 아닌 page'],
     ['limit=0', '1보다 작은 limit'],
     ['limit=101', '100을 넘는 limit'],
-    ['sort=title', 'DTO에 없는 파라미터'],
+    ['sort=password', '허용 목록에 없는 정렬 컬럼'],
+    ['sort=id&order=up', '정해지지 않은 order'],
+    ['unknown=1', 'DTO에 없는 파라미터'],
   ])('/reading-records?%s (GET) returns 400 — %s', (query) => {
     return request(app.getHttpServer())
       .get(`/reading-records?${query}`)
