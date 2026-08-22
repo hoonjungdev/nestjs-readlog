@@ -180,6 +180,7 @@ src/main.ts
 | --- | --- | --- | --- |
 | 독서 기록 생성 | `POST` | `/reading-records` | `201 Created` |
 | 독서 기록 목록 조회 | `GET` | `/reading-records` | `200 OK` |
+| ↳ 필터·페이지네이션 | `GET` | `/reading-records?status=&page=&limit=` | `200 OK` |
 | 독서 기록 상세 조회 | `GET` | `/reading-records/:id` | `200 OK` |
 | 독서 기록 수정 | `PATCH` | `/reading-records/:id` | `200 OK` |
 | 독서 기록 삭제 | `DELETE` | `/reading-records/:id` | `204 No Content` |
@@ -199,6 +200,8 @@ src/main.ts
 | `author` | string | 필수 | 저자. 빈 문자열 불가 |
 | `status` | `want_to_read` \| `reading` \| `finished` | 선택 | 생략하면 `want_to_read` |
 | `rating` | number \| null | 선택 | 1~5 정수. 없으면 `null` |
+
+지금은 이 다섯 필드가 그대로 응답에도 나가지만, **테이블의 모양과 응답의 모양은 별개로 관리합니다.** 응답에 나갈 필드는 `src/reading-records/dto/reading-record-response.dto.ts`에 따로 선언되어 있어서, 테이블에 컬럼을 추가해도 이 파일에 적지 않으면 응답에 나가지 않습니다. 반대로 말하면 **공개할 필드를 새로 추가할 때는 `schema.prisma`와 이 응답 DTO를 함께 고쳐야 합니다.**
 
 아직 도입하지 않은 필드는 다음과 같습니다. 필요해지는 시점에 마이그레이션과 함께 추가합니다.
 
@@ -229,9 +232,38 @@ curl -X POST http://localhost:3000/reading-records \
 
 ### 목록 조회 — `GET /reading-records`
 
+쿼리 파라미터로 거르고 나눠 받을 수 있습니다. 셋 다 생략할 수 있습니다.
+
+| 파라미터 | 기본값 | 설명 |
+| --- | --- | --- |
+| `status` | 없음 (전체) | `want_to_read` \| `reading` \| `finished` 중 하나로 거릅니다 |
+| `page` | `1` | 몇 번째 페이지인지. 1 이상의 정수 |
+| `limit` | `10` | 한 페이지에 몇 건인지. 1~100 사이의 정수 |
+
 ```bash
-curl http://localhost:3000/reading-records
+curl "http://localhost:3000/reading-records?status=reading&page=1&limit=2"
 ```
+
+응답은 배열이 아니라 목록과 함께 페이지 정보를 담은 객체입니다.
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "title": "객체지향의 사실과 오해",
+      "author": "조영호",
+      "status": "reading",
+      "rating": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 2
+}
+```
+
+`total`은 **`status` 조건에 맞는 전체 건수**입니다(현재 페이지의 건수가 아닙니다). 마지막 페이지인지 판단하려면 이 값을 씁니다 — `page * limit >= total`이면 마지막 페이지입니다.
 
 ### 수정 — `PATCH /reading-records/:id`
 
@@ -268,6 +300,7 @@ curl -i -X DELETE http://localhost:3000/reading-records/1
 | 필수 필드 누락, 타입 불일치, 범위를 벗어난 `rating` | `400 Bad Request` |
 | DTO에 없는 필드를 보냄 (`whitelist` + `forbidNonWhitelisted`) | `400 Bad Request` |
 | `:id`가 숫자가 아님 (`ParseIntPipe`) | `400 Bad Request` |
+| 목록 조회의 `status`가 정해진 값이 아니거나, `page`·`limit`이 정수가 아니거나 범위를 벗어남 | `400 Bad Request` |
 | 존재하지 않는 `id` 조회·수정·삭제 | `404 Not Found` |
 
 검증에 실패하면 어떤 필드가 왜 잘못됐는지 메시지로 함께 돌려줍니다.
@@ -425,7 +458,10 @@ SQLite를 쓸 때는 `:memory:`라는 공짜 격리 수단이 있었습니다. �
   - [x] 엔티티 클래스를 `schema.prisma`로 대체
   - [x] 저장소(Repository)를 Prisma 클라이언트로 교체
   - [x] Testcontainers로 테스트 격리
-- [ ] 정리와 개선
-  - [ ] 목록 조회에 필터링·정렬 추가 검토
+- [ ] 정리와 개선 ([08번 노트](./docs/learning/08-목록-필터링.md) 참고)
+  - [x] 목록 조회에 `status` 필터 추가
+  - [x] 목록 조회에 페이지네이션 추가 (`page`, `limit`)
+  - [x] 응답 전용 타입 분리 여부 판단 → 분리하기로 결정 (`ReadingRecordResponseDto`)
+  - [ ] 목록 조회에 정렬 추가 검토 (현재는 `id` 오름차순 고정)
   - [ ] 읽기 시작일·완료일, 메모 필드 추가 검토
-  - [ ] 응답 전용 타입 분리 여부 판단
+  - [ ] 필터·페이지네이션 e2e 테스트
