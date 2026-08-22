@@ -14,10 +14,10 @@ import {
   ReadingRecordsService,
   PaginatedResult,
 } from './reading-records.service';
-import { ReadingRecord } from '../generated/prisma/client';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 import { FindReadingRecordsDto } from './dto/find-reading-records.dto';
+import { ReadingRecordResponseDto } from './dto/reading-record-response.dto';
 
 @Controller('reading-records')
 export class ReadingRecordsController {
@@ -26,14 +26,14 @@ export class ReadingRecordsController {
   @Post()
   create(
     @Body() createReadingRecordDto: CreateReadingRecordDto,
-  ): Promise<ReadingRecord> {
+  ): Promise<ReadingRecordResponseDto> {
     return this.readingRecordsService.create(createReadingRecordDto);
   }
 
   @Get()
   findAll(
     @Query() query: FindReadingRecordsDto,
-  ): Promise<PaginatedResult<ReadingRecord>> {
+  ): Promise<PaginatedResult<ReadingRecordResponseDto>> {
     return this.readingRecordsService.findAll(
       query.status,
       query.page,
@@ -42,7 +42,9 @@ export class ReadingRecordsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number): Promise<ReadingRecord> {
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ReadingRecordResponseDto> {
     return this.readingRecordsService.findOne(id);
   }
 
@@ -50,7 +52,7 @@ export class ReadingRecordsController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateReadingRecordDto: UpdateReadingRecordDto,
-  ): Promise<ReadingRecord> {
+  ): Promise<ReadingRecordResponseDto> {
     return this.readingRecordsService.update(id, updateReadingRecordDto);
   }
 

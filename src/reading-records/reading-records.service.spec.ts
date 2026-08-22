@@ -85,6 +85,46 @@ describe('ReadingRecordsService', () => {
     });
   });
 
+  // 응답에 어떤 키가 나가는지를 못박는 테스트.
+  //
+  // 타입만으로는 이걸 지킬 수 없다. toResponse()를 `return { ...record }`로 바꾸면
+  // 모든 컬럼이 응답에 새어 나가는데도 tsc는 오류를 내지 않는다
+  // (초과 속성 검사는 객체 리터럴에 직접 적은 속성에만 걸린다).
+  // 그래서 "무엇이 공개되는가"라는 약속은 런타임 테스트로 따로 지킨다.
+  describe('응답에 나가는 필드', () => {
+    it('exposes exactly the fields declared in the response dto', async () => {
+      const createdRecord = await service.create({
+        title: '클린 코드',
+        author: '로버트 C. 마틴',
+      });
+
+      expect(Object.keys(createdRecord).sort()).toEqual([
+        'author',
+        'id',
+        'rating',
+        'status',
+        'title',
+      ]);
+
+      // create뿐 아니라 나머지 경로도 같은 모양이어야 한다.
+      const foundRecord = await service.findOne(createdRecord.id);
+      const updatedRecord = await service.update(createdRecord.id, {
+        title: '클린 아키텍처',
+      });
+      const listed = await service.findAll();
+
+      expect(Object.keys(foundRecord).sort()).toEqual(
+        Object.keys(createdRecord).sort(),
+      );
+      expect(Object.keys(updatedRecord).sort()).toEqual(
+        Object.keys(createdRecord).sort(),
+      );
+      expect(Object.keys(listed.data[0]).sort()).toEqual(
+        Object.keys(createdRecord).sort(),
+      );
+    });
+  });
+
   describe('findAll', () => {
     it('returns default pagination metadata when none is given', async () => {
       await service.create({ title: '책1', author: '저자' });

@@ -3,9 +3,9 @@ import { ReadingRecord, ReadingStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
+import { ReadingRecordResponseDto } from './dto/reading-record-response.dto';
 
 // 지금은 findAll() 하나만 쓰지만, 목록 API가 늘어나면 그때마다 재사용한다.
-// "응답 전용 타입과 엔티티 분리"는 다음 로드맵 단계라 여기서는 더 손대지 않는다.
 export interface PaginatedResult<T> {
   data: T[];
   total: number;
@@ -20,12 +20,33 @@ export class ReadingRecordsService {
   // 모델 ReadingRecord → prisma.readingRecord (첫 글자만 소문자)
   constructor(private readonly prisma: PrismaService) {}
 
+  // DB에서 꺼낸 행(ReadingRecord)을 API로 내보낼 모양으로 옮겨 담는다.
+  // 여기 적지 않은 필드는 응답에 나가지 않는다.
+  //
+  // 반환 타입을 ReadingRecordResponseDto로 명시해 두면 타입스크립트가 두 가지를 잡아준다.
+  //   - 필드를 빠뜨리면       → "Property 'title' is missing" 오류
+  //   - 없는 필드를 적으면    → "Object literal may only specify known properties" 오류
+  //     (객체 리터럴에만 적용되는 '초과 속성 검사'다.)
+  //
+  // 다만 그 검사에는 구멍이 있다. `return { ...record }`로 쓰면 스프레드로 펼친 속성은
+  // 검사 대상이 아니라서 모든 컬럼이 새는데도 컴파일 오류가 나지 않는다.
+  // 그래서 필드를 하나씩 적고, 응답에 나가는 키 목록은 테스트로 따로 못박아 둔다.
+  private toResponse(record: ReadingRecord): ReadingRecordResponseDto {
+    return {
+      id: record.id,
+      title: record.title,
+      author: record.author,
+      status: record.status,
+      rating: record.rating,
+    };
+  }
+
   async create(
     createReadingRecordDto: CreateReadingRecordDto,
-  ): Promise<ReadingRecord> {
+  ): Promise<ReadingRecordResponseDto> {
     // TypeORM은 create()로 객체를 만들고 save()로 저장하는 2단계였다.
     // Prisma의 create()는 한 번에 INSERT를 실행하고 저장된 행을 돌려준다.
-    return this.prisma.readingRecord.create({
+    const createdRecord = await this.prisma.readingRecord.create({
       data: {
         title: createReadingRecordDto.title,
         author: createReadingRecordDto.author,
@@ -37,13 +58,15 @@ export class ReadingRecordsService {
         rating: createReadingRecordDto.rating ?? null,
       },
     });
+
+    return this.toResponse(createdRecord);
   }
 
   async findAll(
     status?: ReadingStatus,
     page = 1,
     limit = 10,
-  ): Promise<PaginatedResult<ReadingRecord>> {
+  ): Promise<PaginatedResult<ReadingRecordResponseDto>> {
     const where = { status };
 
     // findMany와 count는 서로의 결과를 기다릴 필요가 없는 독립적인 쿼리라
@@ -63,10 +86,15 @@ export class ReadingRecordsService {
       this.prisma.readingRecord.count({ where }),
     ]);
 
-    return { data, total, page, limit };
+    return {
+      data: data.map((record) => this.toResponse(record)),
+      total,
+      page,
+      limit,
+    };
   }
 
-  async findOne(id: number): Promise<ReadingRecord> {
+  async findOne(id: number): Promise<ReadingRecordResponseDto> {
     // 찾지 못하면 예외가 아니라 null을 돌려준다.
     const readingRecord = await this.prisma.readingRecord.findUnique({
       where: { id },
@@ -76,13 +104,13 @@ export class ReadingRecordsService {
       throw new NotFoundException(`Reading record with ID ${id} not found`);
     }
 
-    return readingRecord;
+    return this.toResponse(readingRecord);
   }
 
   async update(
     id: number,
     updateReadingRecordDto: UpdateReadingRecordDto,
-  ): Promise<ReadingRecord> {
+  ): Promise<ReadingRecordResponseDto> {
     // 없는 id면 여기서 NotFoundException이 난다.
     // (이걸 생략하면 아래 update가 Prisma 고유의 P2025 오류를 던져 500이 된다.)
     await this.findOne(id);
@@ -95,7 +123,7 @@ export class ReadingRecordsService {
     //
     // 또 하나 달라진 점: update는 갱신된 행을 DB에서 다시 읽어 돌려준다.
     // 예전처럼 "메모리 위 객체가 undefined로 오염된 채 응답이 되는" 사고가 구조적으로 생기지 않는다.
-    return this.prisma.readingRecord.update({
+    const updatedRecord = await this.prisma.readingRecord.update({
       where: { id },
       data: {
         title: updateReadingRecordDto.title,
@@ -104,6 +132,8 @@ export class ReadingRecordsService {
         rating: updateReadingRecordDto.rating,
       },
     });
+
+    return this.toResponse(updatedRecord);
   }
 
   async remove(id: number): Promise<void> {
