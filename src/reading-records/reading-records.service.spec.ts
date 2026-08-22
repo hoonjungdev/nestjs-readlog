@@ -85,6 +85,54 @@ describe('ReadingRecordsService', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('returns default pagination metadata when none is given', async () => {
+      await service.create({ title: '책1', author: '저자' });
+      await service.create({ title: '책2', author: '저자' });
+
+      const result = await service.findAll();
+
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
+    });
+
+    it('slices the result according to page and limit, while total counts everything', async () => {
+      for (let i = 1; i <= 5; i++) {
+        await service.create({ title: `책${i}`, author: '저자' });
+      }
+
+      const firstPage = await service.findAll(undefined, 1, 2);
+      const secondPage = await service.findAll(undefined, 2, 2);
+
+      expect(firstPage.data).toHaveLength(2);
+      expect(firstPage.total).toBe(5);
+      expect(secondPage.data).toHaveLength(2);
+      // 페이지가 다르면 서로 다른 행을 받아야 한다 (같은 행이 중복되면 안 됨).
+      expect(firstPage.data[0].id).not.toBe(secondPage.data[0].id);
+    });
+
+    it('counts total within the filtered status, not the whole table', async () => {
+      await service.create({
+        title: '읽는 중',
+        author: '저자',
+        status: ReadingStatus.reading,
+      });
+      await service.create({
+        title: '다 읽음',
+        author: '저자',
+        status: ReadingStatus.finished,
+      });
+
+      const result = await service.findAll(ReadingStatus.reading);
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].status).toBe(ReadingStatus.reading);
+      expect(result.total).toBe(1);
+    });
+  });
+
   describe('findOne', () => {
     it('returns a reading record with the given id', async () => {
       const createdRecord = await service.create({

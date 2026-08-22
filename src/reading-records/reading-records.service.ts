@@ -4,6 +4,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
 
+// 지금은 findAll() 하나만 쓰지만, 목록 API가 늘어나면 그때마다 재사용한다.
+// "응답 전용 타입과 엔티티 분리"는 다음 로드맵 단계라 여기서는 더 손대지 않는다.
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 @Injectable()
 export class ReadingRecordsService {
   // TypeORM에서는 테이블마다 Repository를 하나씩 주입받았지만,
@@ -30,14 +39,31 @@ export class ReadingRecordsService {
     });
   }
 
-  async findAll(status?: ReadingStatus): Promise<ReadingRecord[]> {
-    return this.prisma.readingRecord.findMany({
-      // PostgreSQL은 ORDER BY가 없으면 행의 순서를 보장하지 않는다.
-      // (SQLite에서는 우연히 넣은 순서대로 나왔을 뿐이다.)
-      // 응답 순서가 들쭉날쭉해지지 않도록 명시한다.
-      orderBy: { id: 'asc' },
-      where: { status },
-    });
+  async findAll(
+    status?: ReadingStatus,
+    page = 1,
+    limit = 10,
+  ): Promise<PaginatedResult<ReadingRecord>> {
+    const where = { status };
+
+    // findMany와 count는 서로의 결과를 기다릴 필요가 없는 독립적인 쿼리라
+    // Promise.all로 동시에 보낸다. 순서대로 await 하면 두 번째 쿼리가
+    // 첫 번째 쿼리의 응답을 기다리는 동안 그냥 놀게 된다.
+    const [data, total] = await Promise.all([
+      this.prisma.readingRecord.findMany({
+        // PostgreSQL은 ORDER BY가 없으면 행의 순서를 보장하지 않는다.
+        // (SQLite에서는 우연히 넣은 순서대로 나왔을 뿐이다.)
+        // 응답 순서가 들쭉날쭉해지지 않도록 명시한다. 페이지네이션에서는
+        // 이게 없으면 페이지마다 순서가 달라져 같은 행이 중복되거나 빠질 수 있다.
+        orderBy: { id: 'asc' },
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.readingRecord.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
   }
 
   async findOne(id: number): Promise<ReadingRecord> {

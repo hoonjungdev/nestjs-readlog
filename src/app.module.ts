@@ -22,6 +22,10 @@ import { ReadingRecordsModule } from './reading-records/reading-records.module';
       useValue: new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
+        // 쿼리 파라미터(page, limit)를 @Type(() => Number)가 숫자로 바꾼 뒤,
+        // 그 변환된 값이 컨트롤러에 실제로 전달되도록 한다. 이게 꺼져 있으면
+        // 검증은 통과해도 컨트롤러는 여전히 문자열("1")을 받는다.
+        transform: true,
       }),
     },
   ],

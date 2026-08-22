@@ -10,7 +10,10 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ReadingRecordsService } from './reading-records.service';
+import {
+  ReadingRecordsService,
+  PaginatedResult,
+} from './reading-records.service';
 import { ReadingRecord } from '../generated/prisma/client';
 import { CreateReadingRecordDto } from './dto/create-reading-record.dto';
 import { UpdateReadingRecordDto } from './dto/update-reading-record.dto';
@@ -28,8 +31,14 @@ export class ReadingRecordsController {
   }
 
   @Get()
-  findAll(@Query() query: FindReadingRecordsDto): Promise<ReadingRecord[]> {
-    return this.readingRecordsService.findAll(query.status);
+  findAll(
+    @Query() query: FindReadingRecordsDto,
+  ): Promise<PaginatedResult<ReadingRecord>> {
+    return this.readingRecordsService.findAll(
+      query.status,
+      query.page,
+      query.limit,
+    );
   }
 
   @Get(':id')
